@@ -39,37 +39,37 @@ class Chef
       #search the file line by line and match each line with the given regex
       #if matched, replace the whole line with newline.
       def search_file_replace_line(regex, newline)
-        search_match(regex, newline, 'r', 1)
+        search_match(regex, newline, :replace, :full_line)
       end
 
       #search the file line by line and match each line with the given regex
       #if matched, replace the match (all occurances)  with the replace parameter
       def search_file_replace(regex, replace)
-        search_match(regex, replace, 'r', 2)
+        search_match(regex, replace, :replace, :partial_line)
       end
 
       #search the file line by line and match each line with the given regex
       #if matched, delete the line
       def search_file_delete_line(regex)
-        search_match(regex, " ", 'd', 1)
+        search_match(regex, " ", :delete, :full_line)
       end
 
       #search the file line by line and match each line with the given regex
       #if matched, delete the match (all occurances) from the line
       def search_file_delete(regex)
-        search_match(regex, " ", 'd', 2)
+        search_match(regex, " ", :delete, :partial_line)
       end
 
       #search the file line by line and match each line with the given regex
       #if matched, insert newline after each matching line
       def insert_line_after_match(regex, newline)
-        search_match(regex, newline, 'i', 1)
+        search_match(regex, newline, :insert, :after_match)
       end
 
       #search the file line by line and match each line with the given regex
       #if not matched, insert newline at the end of the file
       def insert_line_if_no_match(regex, newline)
-        search_match(regex, newline, 'i', 2)
+        search_match(regex, newline, :insert, :if_no_match)
       end
 
       #Make a copy of old_file and write new file out (only if file changed)
@@ -92,9 +92,10 @@ class Chef
       private
 
       #helper method to do the match, replace, delete, and insert operations
-      #command is the switch of delete, replace, and insert ('d', 'r', 'i')
-      #method is to control operation on whole line or only the match (1 for line, 2 for match)
-      def search_match(regex, replace, command, method)
+      #command is the switch of delete, replace, and insert (:delete, :replace, :insert)
+      #method is to control operation on whole line or only the match (:full_line for line, :partial_line for match)
+      # or, for insert, whether it's done after the match or if no match is found (:after_match, :if_no_match)
+      def search_match(regex, replacement, command, method)
 
         #convert regex to a Regexp object (if not already is one) and store it in exp.
         exp = Regexp.new(regex)
@@ -107,23 +108,22 @@ class Chef
         contents.each do |line|
           if line.match(exp)
             match_found = true
-            self.file_edited = true
-            case
-            when command == 'r'
-              new_contents << ((method == 1) ? replace : line.gsub!(exp, replace))
-            when command == 'd'
-              if method == 2
-                new_contents << line.gsub!(exp, "")
-              end
-            when command == 'i'
+            case command
+            when :replace
+              new_contents << ((method == :full_line) ? replacement : line.gsub!(exp, replacement))
+            when :delete
+              new_contents << line.gsub!(exp, "") if method == :partial_line
+            when :insert
               new_contents << line
-              new_contents << replace unless method == 2
+              new_contents << replace if method == :after_match
             end
           else
             new_contents << line
           end
         end
-        if command == 'i' && method == 2 && ! match_found
+        self.file_edited = true if match_found
+
+        if command == :insert && method == :if_no_match && ! match_found
           new_contents << replace
           self.file_edited = true
         end
